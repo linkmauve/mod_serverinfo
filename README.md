@@ -12,3 +12,8 @@ This Prosody module provides server information (Number of registered users, num
 ## Install
 
 Clone this Git repository into your Prosody modules directory and enable the module in your configuration by adding "serverinfo" to your modules list. Then restart Prosody to apply the changes.
+
+
+## Known issues
+
+* Module does not work with LDAP as a user backend.

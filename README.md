@@ -9,6 +9,31 @@ This Prosody module provides server information (Number of registered users, num
     http://<prosodyserver>:<httpport>/serverinfo
 
 
+## Example JSON output
+
+    {
+        "servers": {
+            "incoming": [
+                "yax.im",
+                "fusselkater.org",
+                "skweez.net",
+                "blah.im",
+                "chat.c3d2.de"
+            ],
+            "outgoing": [
+                "engelbracht.de",
+                "straubis.org",
+                "xmppnet.de",
+                "israuorflix.tk"
+            ]
+        },
+        "users": {
+            "connected": 697,
+            "registered": 3650
+        }
+    }
+
+
 ## Install
 
 Clone this Git repository into your Prosody modules directory and enable the module in your configuration by adding "serverinfo" to your modules list. Then restart Prosody to apply the changes.

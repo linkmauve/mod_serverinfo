@@ -41,4 +41,4 @@ Clone this Git repository into your Prosody modules directory and enable the mod
 
 ## Known issues
 
-* Module does not work with LDAP as a user backend.
+* Counting registered users does not work with LDAP as a user backend. This is because Prosody can't iterate over the LDAP user database.

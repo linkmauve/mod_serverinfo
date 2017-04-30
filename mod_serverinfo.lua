@@ -17,9 +17,12 @@ function count_users()
 
 
     for host, _ in pairs(hosts) do
-        if hosts[host].users and hosts[host].users.users then
-            for _ in hosts[host].users:users() do
-                users_registered = users_registered + 1
+        if hosts[host].users then
+            usertable = hosts[host].users:users()
+            if usertable then
+                for _ in usertable do
+                    users_registered = users_registered + 1
+                end
             end
         end
     end

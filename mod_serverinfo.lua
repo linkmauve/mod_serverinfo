@@ -2,77 +2,134 @@
 -- mod_serverinfo by Thomas Leister <thomas.leister@mailbox.org>
 --
 
+--
+-- Config options in prosody.cfg.lua (global namespace):
+-------------------------------------------------------------
+--
+-- serverinfo = {
+--     admin_name = "Thomas Leister";
+--     admin_email = "xmpp@trashserver.net";
+--     admin_web = "https://trashserver.net";
+--
+--     location_name = "Servercow";
+--     location_coords_long = 666;
+--     location_coords_lat = 42;
+-- }
+
 
 module:depends("http");
 
-local json = require "util.json".encode_ordered;
-local hosts = prosody.hosts;
+local json = require "util.json".encode;
+local vhosts = prosody.hosts;
+local serverinfo_settings = module:get_option("serverinfo", {});
 
 
+function processHost(vhostname)
+    vhost = hosts[vhostname]
 
-function count_users()
-    users = {}
+    -- Object for JSON output.
+    vhostjson = {
+        name = vhostname,
+        connections = {
+            s2s = {
+                incoming = {},
+                outgoing = {}
+            },
+            c2s = {
+                count = 0
+            }
+        },
+        users_connected = 0
+    }
+
     local users_connected = 0
-    local users_registered = 0
+    local c2s_connection_count = 0
+    local servers_outgoing = {}
+    local servers_incoming = {}
 
+    -- Count online users
+	if vhost.sessions then
+        for username in pairs(vhost.sessions) do
+			users_connected = users_connected + 1
+            -- log("debug", "User %s is online.", username)
 
-    for host, _ in pairs(hosts) do
-        if hosts[host].users then
-            usertable = hosts[host].users:users()
-            if usertable then
-                for _ in usertable do
-                    users_registered = users_registered + 1
-                end
+            -- how many resources (client connections?)
+            for resource in pairs(vhost.sessions[username].sessions) do
+                -- log("debug", "Found resource: %s", resource)
+                c2s_connection_count = c2s_connection_count + 1
             end
-        end
-    end
-
-
-    for hostname, host_session in pairs(hosts) do
-		if host_session.sessions then
-			for username in pairs(host_session.sessions) do
-				users_connected = users_connected + 1
-			end
 		end
+        log("debug", ">>> vHost %s has %d online users and %d c2s connections.", vhostname, users_connected, c2s_connection_count);
+    else
+        log("debug", ">>> vHost seems to be component vhost.", vhostname);
 	end
 
-    users["connected"] = users_connected
-    users["registered"] = users_registered
 
-    return users
-end
+    --
+    -- Count S2S connections
+    --
 
+    -- Outgoing s2s connections
+    for _, conn in pairs(vhost.s2sout) do
+        table.insert(servers_outgoing, { to = conn.to_host })
+        log("debug", "Outgoing connection to %s", conn.to_host)
+    end
 
-function count_servers_connected()
-    servers = {}
-    servers_outgoing = {}
-    servers_incoming = {}
-    servers["outgoing"] = servers_outgoing
-    servers["incoming"] = servers_incoming
-
-    for host, _ in pairs(hosts) do
-        for _, value in pairs(hosts[host].s2sout) do
-            if servers_outgoing[value.to_host] == nil then
-                table.insert(servers_outgoing, value.to_host)
-            end
+    -- Loop through global incoming connections and select connections to this vhost
+    for conn, _ in pairs(prosody.incoming_s2s) do
+        if conn.to_host == vhostname then
+            table.insert(servers_incoming, { from = conn.from_host })
+            log("debug", "Incoming connection from %s", conn.from_host)
         end
     end
 
-    for key, _ in pairs(prosody.incoming_s2s) do
-        if servers_incoming[key.from_host] == nil then
-            table.insert(servers_incoming, key.from_host)
-        end
-    end
+    -- fill vhostjson with values
+    vhostjson.connections.s2s.outgoing = servers_outgoing
+    vhostjson.connections.s2s.incoming = servers_incoming
+    vhostjson.connections.c2s.count = c2s_connection_count
+    vhostjson.users_connected = users_connected
 
-    return servers;
+
+    return vhostjson
 end
 
+
+function allvHosts()
+    local vhostsjson = {}
+
+    for vhostname, _ in pairs(hosts) do
+        -- This includes all vHosts (MUC components, upload components, ... etc as well!)
+        log("debug", ">>>> Found vHost: %s", vhostname);
+        vhostjson = processHost(vhostname);
+        table.insert(vhostsjson, vhostjson);
+    end
+
+    return vhostsjson;
+end
 
 
 function httpresponse(event, path)
     local body = json({
-        servers = count_servers_connected(),
-        users = count_users()
+        api = {
+            version = 1
+        },
+        software = {
+            name = "Prosody",
+            version = prosody.version
+        },
+        location = {
+            name = serverinfo_settings.location_name or "[unknown]",
+            coordinates = {
+                long = serverinfo_settings.location_coords_long or 0.0,
+                lat = serverinfo_settings.location_coords_lat or 0.0
+            }
+        },
+        admin = {
+            name = serverinfo_settings.admin_name or "[unknown]",
+            email = serverinfo_settings.admin_email or "[unknown]",
+            web = serverinfo_settings.admin_web or "[unknown]"
+        },
+        vhosts = allvHosts()
     })
 
     return { status_code = 200, headers = { content_type = "application/json"; }, body = body };

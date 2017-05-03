@@ -14,15 +14,21 @@
 --     location_name = "Servercow";
 --     location_coords_long = 666;
 --     location_coords_lat = 42;
+--
+--     cache_ttl = 60;
 -- }
 
 
 module:depends("http");
 
+local log = require "util.logger".init("mod_serverinfo");
 local json = require "util.json".encode;
 local vhosts = prosody.hosts;
 local serverinfo_settings = module:get_option("serverinfo", {});
-
+local jsonresponse;
+local cache_updated;
+local cache_ttl = serverinfo_settings.cache_ttl or 60;
+--local cache_ttl = 60;
 
 function processHost(vhostname)
     vhost = hosts[vhostname]
@@ -99,7 +105,7 @@ function allvHosts()
 
     for vhostname, _ in pairs(hosts) do
         -- This includes all vHosts (MUC components, upload components, ... etc as well!)
-        log("debug", ">>>> Found vHost: %s", vhostname);
+        log("debug", "Found vHost: %s", vhostname);
         vhostjson = processHost(vhostname);
         table.insert(vhostsjson, vhostjson);
     end
@@ -108,31 +114,54 @@ function allvHosts()
 end
 
 
-function httpresponse(event, path)
-    local body = json({
-        api = {
-            version = 1
-        },
-        software = {
-            name = "Prosody",
-            version = prosody.version
-        },
-        location = {
-            name = serverinfo_settings.location_name or "[unknown]",
-            coordinates = {
-                long = serverinfo_settings.location_coords_long or 0.0,
-                lat = serverinfo_settings.location_coords_lat or 0.0
-            }
-        },
-        admin = {
-            name = serverinfo_settings.admin_name or "[unknown]",
-            email = serverinfo_settings.admin_email or "[unknown]",
-            web = serverinfo_settings.admin_web or "[unknown]"
-        },
-        vhosts = allvHosts()
-    })
+function jsonResponse()
+    -- Query server information only in certain intervals - not on every page request. (Caching)
+    local cache_valid = false
 
-    return { status_code = 200, headers = { content_type = "application/json"; }, body = body };
+    -- Check if cache is valid
+    local age = os.difftime(os.time(), cache_updated)
+    if age < cache_ttl then
+        cache_valid = true
+    end
+
+
+    if cache_valid == true then
+        log("debug", "Cache is valid.")
+    else
+        log("debug", "Cache is invalid. Querying data ...")
+
+        jsonreponse = json({
+            api = {
+                version = 1,
+                ttl = cache_ttl
+            },
+            software = {
+                name = "Prosody",
+                version = prosody.version
+            },
+            location = {
+                name = serverinfo_settings.location_name or "[unknown]",
+                coordinates = {
+                    long = serverinfo_settings.location_coords_long or 0.0,
+                    lat = serverinfo_settings.location_coords_lat or 0.0
+                }
+            },
+            admin = {
+                name = serverinfo_settings.admin_name or "[unknown]",
+                email = serverinfo_settings.admin_email or "[unknown]",
+                web = serverinfo_settings.admin_web or "[unknown]"
+            },
+            vhosts = allvHosts()
+        })
+
+        cache_updated = os.time();
+    end
+end
+
+
+function httpresponse(event, path)
+    jsonResponse()
+    return { status_code = 200, headers = { content_type = "application/json"; }, body = jsonreponse };
 end
 
 

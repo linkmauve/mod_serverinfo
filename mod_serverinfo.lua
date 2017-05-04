@@ -23,6 +23,8 @@ module:depends("http");
 
 local log = require "util.logger".init("mod_serverinfo");
 local json = require "util.json".encode;
+local url = require("socket.url");
+
 local vhosts = prosody.hosts;
 local serverinfo_settings = module:get_option("serverinfo", {});
 local jsonresponse;
@@ -50,8 +52,8 @@ function processHost(vhostname)
 
     local users_connected = 0
     local c2s_connection_count = 0
-    local servers_outgoing = {}
-    local servers_incoming = {}
+    local servers_outgoing = { {dummy=true} }     -- Workaround: These two have a dummy object in them, which lets Lua interpret table as array, not as object, even
+    local servers_incoming = { {dummy=true} }     -- If we left this empty, Lua would interpret this as object, which would generate wrong json output! Dummy elements fill be filtered from json output.
 
     -- Count online users
 	if vhost.sessions then
@@ -130,7 +132,7 @@ function jsonResponse()
     else
         log("debug", "Cache is invalid. Querying data ...")
 
-        jsonreponse = json({
+        jsonresponse = json({
             api = {
                 version = 1,
                 ttl = cache_ttl
@@ -161,7 +163,10 @@ end
 
 function httpresponse(event, path)
     jsonResponse()
-    return { status_code = 200, headers = { content_type = "application/json"; }, body = jsonreponse };
+    -- Ugly workaround: Now remove dummie entries in incoming/outgoing array. Watch the order!
+    jsonresponse = string.gsub(jsonresponse, "{\"dummy\":true},", "") -- in case dummy is the only element
+    jsonresponse = string.gsub(jsonresponse, "{\"dummy\":true}", "") -- in case dummy element has siblings
+    return { status_code = 200, headers = { content_type = "application/json"; }, body = jsonresponse };
 end
 
 

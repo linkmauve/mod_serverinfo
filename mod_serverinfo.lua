@@ -136,7 +136,7 @@ function jsonResponse()
             api = {
                 version = 1,
                 ttl = cache_ttl,
-                created = os.time()
+                timestamp = os.time()
             },
             software = {
                 name = "Prosody",

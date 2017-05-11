@@ -1,6 +1,6 @@
 # mod_serverinfo
 
-This Prosody Module outputs JSON-formatted server information via HTTP GET.
+This Prosody module outputs JSON-formatted server information via HTTP.
 
 *Currently used by https://xmpp-network.info for data gathering. Feel free to use this module for your own project.*
 
@@ -107,7 +107,7 @@ Clone this Git repository into your Prosody modules directory and enable the mod
 
 ## Configure
 
-Available configuration options in prosody.cfg.lua:
+Available configuration options for ```prosody.cfg.lua```:
 
     serverinfo = {
         admin_name = "John Doe";
@@ -121,3 +121,5 @@ Available configuration options in prosody.cfg.lua:
 
         cache_ttl = 60;
     }
+
+**Make sure you place this config section before the first VirtualHost declaration (into the global section)!**

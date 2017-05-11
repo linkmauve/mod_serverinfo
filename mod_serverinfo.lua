@@ -9,6 +9,7 @@
 -- serverinfo = {
 --     admin_name = "Thomas Leister";
 --     admin_email = "xmpp@trashserver.net";
+--     admin_xmpp = "admin@trashserver.net"
 --     admin_web = "https://trashserver.net";
 --
 --     location_name = "Servercow";
@@ -30,7 +31,7 @@ local serverinfo_settings = module:get_option("serverinfo", {});
 local jsonresponse;
 local cache_updated;
 local cache_ttl = serverinfo_settings.cache_ttl or 60;
---local cache_ttl = 60;
+
 
 function processVhost(vhostname)
     vhost = hosts[vhostname]
@@ -67,7 +68,7 @@ function processVhost(vhostname)
                 c2s_connection_count = c2s_connection_count + 1
             end
 		end
-        log("debug", ">>> vHost %s has %d online users and %d c2s connections.", vhostname, users_connected, c2s_connection_count);
+        log("debug", "vHost %s has %d online users and %d c2s connections.", vhostname, users_connected, c2s_connection_count);
 	end
 
 
@@ -95,7 +96,6 @@ function processVhost(vhostname)
     vhostjson.connections.c2s.count = c2s_connection_count
     vhostjson.users_connected = users_connected
 
-
     return vhostjson
 end
 
@@ -105,7 +105,7 @@ function allvHosts()
 
     for vhostname, host in pairs(hosts) do
         -- count vHosts with type "local" only. vHosts with type "component" are components e.g. MUC components.
-        if host.type == "local" then
+        if (host.type == "local") and not (vhostname == "localhost") then
             log("debug", "Found vHost: %s", vhostname);
             vhostjson = processVhost(vhostname);
             table.insert(vhostsjson, vhostjson);
@@ -212,6 +212,7 @@ function jsonResponse()
             admin = {
                 name = serverinfo_settings.admin_name or "[unknown]",
                 email = serverinfo_settings.admin_email or "[unknown]",
+                xmpp = serverinfo_settings.admin_xmpp or "[unknown]",
                 web = serverinfo_settings.admin_web or "[unknown]"
             },
             vhosts = allvHosts(),

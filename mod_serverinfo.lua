@@ -32,7 +32,7 @@ local cache_updated;
 local cache_ttl = serverinfo_settings.cache_ttl or 60;
 --local cache_ttl = 60;
 
-function processHost(vhostname)
+function processVhost(vhostname)
     vhost = hosts[vhostname]
 
     -- Object for JSON output.
@@ -52,7 +52,7 @@ function processHost(vhostname)
 
     local users_connected = 0
     local c2s_connection_count = 0
-    local servers_outgoing = { {dummy=true} }     -- Workaround: These two have a dummy object in them, which lets Lua interpret table as array, not as object, even
+    local servers_outgoing = { {dummy=true} }     -- Workaround: These two have a dummy object in them, which lets Lua interpret table as array, not as object.
     local servers_incoming = { {dummy=true} }     -- If we left this empty, Lua would interpret this as object, which would generate wrong json output! Dummy elements fill be filtered from json output.
 
     -- Count online users
@@ -68,8 +68,6 @@ function processHost(vhostname)
             end
 		end
         log("debug", ">>> vHost %s has %d online users and %d c2s connections.", vhostname, users_connected, c2s_connection_count);
-    else
-        log("debug", ">>> vHost seems to be component vhost.", vhostname);
 	end
 
 
@@ -105,14 +103,76 @@ end
 function allvHosts()
     local vhostsjson = {}
 
-    for vhostname, _ in pairs(hosts) do
-        -- This includes all vHosts (MUC components, upload components, ... etc as well!)
-        log("debug", "Found vHost: %s", vhostname);
-        vhostjson = processHost(vhostname);
-        table.insert(vhostsjson, vhostjson);
+    for vhostname, host in pairs(hosts) do
+        -- count vHosts with type "local" only. vHosts with type "component" are components e.g. MUC components.
+        if host.type == "local" then
+            log("debug", "Found vHost: %s", vhostname);
+            vhostjson = processVhost(vhostname);
+            table.insert(vhostsjson, vhostjson);
+        end
     end
 
     return vhostsjson;
+end
+
+
+
+function processComponent(componentname)
+    component = hosts[componentname]
+
+    -- Object for JSON output.
+    componentjson = {
+        name = componentname,
+        connections = {
+            s2s = {
+                incoming = {},
+                outgoing = {}
+            }
+        }
+    }
+
+    local servers_outgoing = { {dummy=true} }     -- Workaround: These two have a dummy object in them, which lets Lua interpret table as array, not as object.
+    local servers_incoming = { {dummy=true} }     -- If we left this empty, Lua would interpret this as object, which would generate wrong json output! Dummy elements fill be filtered from json output.
+
+    --
+    -- Count S2S connections
+    --
+
+    -- Outgoing s2s connections
+    for _, conn in pairs(component.s2sout) do
+        table.insert(servers_outgoing, { to = conn.to_host })
+        log("debug", "Outgoing connection to %s", conn.to_host)
+    end
+
+    -- Loop through global incoming connections and select connections to this vhost
+    for conn, _ in pairs(prosody.incoming_s2s) do
+        if conn.to_host == componentname then
+            table.insert(servers_incoming, { from = conn.from_host })
+            log("debug", "Incoming connection from %s", conn.from_host)
+        end
+    end
+
+    -- fill vhostjson with values
+    componentjson.connections.s2s.outgoing = servers_outgoing
+    componentjson.connections.s2s.incoming = servers_incoming
+
+    return componentjson
+end
+
+
+function allComponents()
+    local componentsjson = {}
+
+    for componentname, host in pairs(hosts) do
+        -- count vHosts with type "local" only. vHosts with type "component" are components e.g. MUC components.
+        if host.type == "component" then
+            log("debug", "Found component: %s ", componentname);
+            componentjson = processComponent(componentname);
+            table.insert(componentsjson, componentjson);
+        end
+    end
+
+    return componentsjson;
 end
 
 
@@ -154,7 +214,8 @@ function jsonResponse()
                 email = serverinfo_settings.admin_email or "[unknown]",
                 web = serverinfo_settings.admin_web or "[unknown]"
             },
-            vhosts = allvHosts()
+            vhosts = allvHosts(),
+            components = allComponents()
         })
 
         cache_updated = os.time();
